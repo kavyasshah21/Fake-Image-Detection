@@ -16,5 +16,5 @@ router.delete("/:id", authMiddleware.authUser, uploadController.deleteImage)
 
 
 
-module.exports = router
+module.exports = router 
 

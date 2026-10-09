@@ -1,18 +1,5 @@
+const { analyzeImage } = require("./ml.service")
 
-
-
-async function analyzeImage(image){
-
-        const result = {
-        predictedClass: null,
-        confidence: null,
-        attentionHeatmap: null,
-        description: null
-    }
-
-    return result;
-    
+module.exports = {
+    analyzeImage
 }
-
-
-module.exports = analyzeImage

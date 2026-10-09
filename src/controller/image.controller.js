@@ -1,5 +1,5 @@
-const {uploadFile , deleteFile} = require("../services/storage.services")
-const analyzeImage = require("../services/detection.services")
+const { analyzeImage } = require("../services/detection.services")
+const { uploadFile, deleteFile } = require("../services/storage.services")
 const imageModel = require("../models/image.model")
 
 
@@ -63,30 +63,33 @@ async function getMyImages(req, res) {
     }
 }
 
-async function detectImage(req,res){
-    
-    try{
-    const image = req.file
+async function detectImage(req, res) {
 
-    if(!image){
-        return res.status(400).json({
-            message : "Image Not Uploaded"
+    try {
+
+        const image = req.file
+
+        if (!image) {
+            return res.status(400).json({
+                message: "Image Not Uploaded"
+            })
+        }
+
+        const result = await analyzeImage(image)
+
+        return res.status(200).json({
+            message: "Image Analyzed Successfully",
+            result
+        })
+
+    } catch (error) {
+
+        console.log("ML Detection Error:", error.message)
+
+        return res.status(500).json({
+            message: "Something Went Wrong"
         })
     }
-
-    const result = await analyzeImage( image )
-
-    return res.status(200).json({
-        message : "Image Analyzed Successfully",
-        result
-    })
-
-    }catch(error){  
-        return res.status(500).json({
-            message : "Something Went Wrong"
-        })
-
-}
 }
 
 async function deleteImage(req,res){
