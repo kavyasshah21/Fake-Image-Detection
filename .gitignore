@@ -1,8 +1,39 @@
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Node.js dependencies
+node_modules/
+
+# Python virtual environments
 venv/
 .venv/
+env/
+
+# Python cache files
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Model weights and checkpoints
 *.pth
-.env
+*.pt
+*.ckpt
+*.onnx
+
+# IDE and editor files
 .vscode/
-node_modules/
+.idea/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Python test and tooling caches
+.pytest_cache/
+.mypy_cache/

@@ -16,6 +16,11 @@ const imageSchema = new mongoose.Schema({
         type : String,
         required : true
     },
+    // UPDATED: Store the complete ML and Gemini detection report.
+    detectionResult: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
+    },
 
     user :{
         type : mongoose.Schema.Types.ObjectId,
