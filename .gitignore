@@ -1,5 +1,4 @@
-
-# Environment variables and secrets
+﻿# Environment variables and secrets
 .env
 .env.*
 !.env.example
@@ -10,30 +9,18 @@ node_modules/
 # Python virtual environments
 venv/
 .venv/
-env/
 
 # Python cache files
 __pycache__/
 *.py[cod]
 
-# Model weights and checkpoints
+# Machine learning model weights
 *.pth
 *.pt
 *.ckpt
 *.onnx
 
-# IDE and editor files
-.vscode/
-.idea/
-
-# OS-generated files
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-npm-debug.log*
-
-# Python test and tooling caches
-.pytest_cache/
-.mypy_cache/
+# Local Git backups - do not upload
+.git-empty-backup/
+Backend-backup/
+Backend/.git-backup-preserved/
