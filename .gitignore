@@ -1,31 +1,10 @@
 # Environment variables and secrets
+
 .env
 .env.*
 !.env.example
 
 # Node.js dependencies
-node_modules/
-
-# Python virtual environments
-venv/
-.venv/
-
-# Python cache files
-__pycache__/
-*.py[cod]
-
-# Machine learning model weights
-*.pth
-*.pt
-*.ckpt
-*.onnx
-
-# Local Git backups - do not upload
-.git-empty-backup/
-Backend-backup/
-Backend/.git-backup-preserved/
-
-# Dependencies
 
 node_modules/
 
@@ -33,11 +12,22 @@ node_modules/
 
 dist/
 
-# Environment variables and secrets
+# Python virtual environments
 
-.env
-.env.*
-!.env.example
+venv/
+.venv/
+
+# Python cache files
+
+**pycache**/
+*.py[cod]
+
+# Machine learning model weights
+
+*.pth
+*.pt
+*.ckpt
+*.onnx
 
 # Debug logs
 
@@ -46,10 +36,11 @@ yarn-debug.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Local development
+# Local development and operating system files
 
 .DS_Store
 Thumbs.db
+Desktop.ini
 *.local
 
 # Editor and IDE files
@@ -57,12 +48,13 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Operating system files
-
-Desktop.ini
-
 # Test coverage
 
 coverage/
 
+# Local Git backups - do not upload
+
+.git-empty-backup/
+Backend-backup/
+Backend/.git-backup-preserved/
 Frontend/.git-backup-preserved/
