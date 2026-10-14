@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
 import { api } from "../services/api";
 
 // Get the image filename.
@@ -257,7 +256,6 @@ function History({ onLogout }) {
                 color: "#f1f5f9",
             }}
         >
-            <Navbar isLoggedIn onLogout={onLogout} />
 
             <main
                 style={{

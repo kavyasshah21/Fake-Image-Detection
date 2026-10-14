@@ -1,4 +1,3 @@
-
 import jsPDF from 'jspdf';
 import { api } from './api';
 
@@ -24,10 +23,7 @@ function resolveImageUrl(url) {
 }
 
 async function loadImageAsDataUrl(url) {
-  if (!url) return null;
-
-  if (typeof url !== 'string') return null;
-
+  if (!url || typeof url !== 'string') return null;
   if (url.startsWith('data:')) return url;
 
   try {
@@ -37,7 +33,7 @@ async function loadImageAsDataUrl(url) {
 
     const blob = await response.blob();
 
-    return new Promise((resolve) => {
+    return await new Promise((resolve) => {
       const reader = new FileReader();
 
       reader.onloadend = () => resolve(reader.result);
@@ -51,40 +47,235 @@ async function loadImageAsDataUrl(url) {
 }
 
 function normalizeConfidence(value) {
-  if (value == null || isNaN(value)) return null;
+  if (value == null || value === '' || isNaN(Number(value))) {
+    return null;
+  }
 
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-
+  const num = Number(value);
   return num <= 1 ? num * 100 : num;
 }
 
-function formatTimestamp(ts) {
-  if (!ts) return null;
+function formatTimestamp(value) {
+  if (!value) return null;
 
-  try {
-    const date = new Date(ts);
+  const date = new Date(value);
 
-    if (isNaN(date.getTime())) return null;
-
-    return date.toLocaleString();
-  } catch {
-    return null;
-  }
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleString();
 }
 
 function formatFileSize(bytes) {
-  if (bytes == null || isNaN(bytes)) return null;
+  if (bytes == null || isNaN(Number(bytes))) return null;
 
-  if (bytes < 1024) return `${bytes} B`;
+  const size = Number(bytes);
 
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+
+  return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function stringifyValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return 'Not available';
   }
 
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stringifyValue(item))
+      .join('\n');
+  }
+
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .filter(([, item]) => item !== undefined && item !== null)
+      .map(([key, item]) => {
+        const label = key
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/[_-]/g, ' ')
+          .replace(/^./, (char) => char.toUpperCase());
+
+        if (typeof item === 'object') {
+          return `${label}:\n${stringifyValue(item)}`;
+        }
+
+        return `${label}: ${String(item)}`;
+      })
+      .join('\n');
+  }
+
+  return String(value);
+}
+
+function addSectionHeader(doc, title, margin, y, pageWidth) {
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  if (y + 12 > pageHeight - 18) {
+    doc.addPage();
+    y = 20;
+  }
+
+  doc.setFontSize(12);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(15, 76, 117);
+  doc.text(title, margin, y);
+
+  doc.setDrawColor(15, 76, 117);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y + 2, pageWidth - margin, y + 2);
+
+  doc.setFont(undefined, 'normal');
+
+  return y + 9;
+}
+
+function addField(doc, label, value, margin, y, contentWidth) {
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const safeValue = stringifyValue(value);
+  const labelText = `${label}:`;
+
+  doc.setFontSize(9);
+
+  const labelWidth = Math.min(
+    doc.getTextWidth(labelText) + 3,
+    contentWidth * 0.4
+  );
+
+  const valueWidth = Math.max(
+    contentWidth - labelWidth,
+    contentWidth * 0.6
+  );
+
+  doc.setFont(undefined, 'bold');
+  const labelLines = doc.splitTextToSize(labelText, labelWidth);
+
+  doc.setFont(undefined, 'normal');
+  const valueLines = doc.splitTextToSize(safeValue, valueWidth);
+
+  const lineCount = Math.max(labelLines.length, valueLines.length);
+  const blockHeight = lineCount * 4.5 + 3;
+
+  if (y + blockHeight > pageHeight - 17) {
+    doc.addPage();
+    y = 20;
+  }
+
+  doc.setFontSize(9);
+  doc.setTextColor(60);
+  doc.setFont(undefined, 'bold');
+  doc.text(labelLines, margin, y);
+
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(40);
+  doc.text(valueLines, margin + labelWidth, y);
+
+  return y + blockHeight;
+}
+
+function addWrappedText(doc, text, margin, y, contentWidth, fontSize = 9) {
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  doc.setFontSize(fontSize);
+  doc.setTextColor(40);
+
+  const lines = doc.splitTextToSize(String(text), contentWidth);
+
+  for (const line of lines) {
+    if (y + 6 > pageHeight - 17) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.text(line, margin, y);
+    y += 5;
+  }
+
+  return y;
+}
+
+function addImagePlaceholder(
+  doc,
+  label,
+  x,
+  y,
+  width,
+  height,
+  message
+) {
+  doc.setFontSize(8);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(60);
+  doc.text(label, x, y);
+
+  doc.setFillColor(240, 243, 247);
+  doc.rect(x, y + 3, width, height, 'F');
+
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(120);
+
+  const lines = doc.splitTextToSize(message, width - 4);
+  doc.text(lines, x + 2, y + height / 2 + 3);
+}
+
+function addDetailSection(
+  doc,
+  title,
+  value,
+  margin,
+  y,
+  contentWidth,
+  pageWidth
+) {
+  if (value === undefined || value === null) return y;
+
+  y = addSectionHeader(doc, title, margin, y, pageWidth);
+
+  y = addWrappedText(
+    doc,
+    stringifyValue(value),
+    margin,
+    y,
+    contentWidth
+  );
+
+  return y + 4;
+}
+
+function getImageFormat(dataUrl) {
+  if (dataUrl.startsWith('data:image/png')) return 'PNG';
+  if (dataUrl.startsWith('data:image/jpeg')) return 'JPEG';
+  if (dataUrl.startsWith('data:image/webp')) return 'WEBP';
+
+  return null;
+}
+
+function safeFilename(filename) {
+  const baseName = (filename || 'image')
+    .split(/[\\/]/)
+    .pop()
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
+  return baseName || 'image';
 }
 
 export async function generateReport(analysisData) {
+  if (!analysisData) {
+    throw new Error('Analysis data is missing.');
+  }
+
   const {
     originalImage,
     heatmapImage,
@@ -96,77 +287,86 @@ export async function generateReport(analysisData) {
     timestamp,
   } = analysisData;
 
-  const heatmap = detectionResult?.heatmap || {};
+  const detection = detectionResult || {};
+
+  const heatmap =
+    detection.heatmap && typeof detection.heatmap === 'object'
+      ? detection.heatmap
+      : {};
 
   const reportOriginalImage =
-    heatmap.originalImage || originalImage;
+    heatmap.originalImage ||
+    detection.image ||
+    originalImage;
 
   const reportHeatmapImage =
-    heatmap.image || heatmapImage;
+    heatmap.image ||
+    detection.heatmapImage ||
+    detection.heatmapUrl ||
+    heatmapImage;
 
   const reportOverlayImage =
-    heatmap.overlay || overlayImage;
+    heatmap.overlay ||
+    detection.overlayImage ||
+    detection.overlayUrl ||
+    overlayImage;
 
   const result =
-    detectionResult?.prediction?.class ||
-    detectionResult?.result?.prediction?.class ||
-    (typeof detectionResult?.result === 'string'
-      ? detectionResult.result
-      : null) ||
-    detectionResult?.classification ||
-    detectionResult?.class ||
+    detection.prediction?.class ||
+    detection.result?.prediction?.class ||
+    (typeof detection.result === 'string' ? detection.result : null) ||
+    detection.classification ||
+    detection.class ||
     null;
 
   const confidence = normalizeConfidence(
-    detectionResult?.prediction?.confidence ??
-    detectionResult?.result?.prediction?.confidence ??
-    detectionResult?.confidence ??
-    detectionResult?.confidenceScore
+    detection.prediction?.confidence ??
+      detection.result?.prediction?.confidence ??
+      detection.confidence ??
+      detection.confidenceScore
   );
 
   const modelAccuracy =
-    detectionResult?.modelAccuracy != null
-      ? normalizeConfidence(detectionResult.modelAccuracy)
+    detection.modelAccuracy != null
+      ? normalizeConfidence(detection.modelAccuracy)
       : null;
 
-const status =
-  detectionResult?.reportStatus ||
-  detectionResult?.status ||
-  detectionResult?.result?.reportStatus ||
-  (detectionResult?.success === true ||
-   detectionResult?.result?.success === true
-    ? 'Completed'
-    : 'Not available');
+  const status =
+    detection.reportStatus ||
+    detection.status ||
+    detection.result?.reportStatus ||
+    (detection.success === true
+      ? 'Completed'
+      : detection.success === false
+        ? 'Failed'
+        : 'Not available');
 
+  const analysisTimestamp =
+    timestamp ||
+    detection.createdAt ||
+    detection.timestamp ||
+    detection.analysisTimestamp ||
+    detection.created_at ||
+    detection.detectedAt ||
+    detection.updatedAt;
 
   const description =
-    detectionResult?.description ||
-    detectionResult?.analysis ||
-    detectionResult?.reasoning ||
-    detectionResult?.geminiReport?.executiveSummary ||
+    detection.reasoning ||
+    detection.description ||
+    detection.analysis ||
+    detection.geminiReport?.executiveSummary ||
     null;
-
-  const analysisTs = formatTimestamp(
-    timestamp ||
-    detectionResult?.timestamp ||
-    detectionResult?.analysisTimestamp ||
-    detectionResult?.createdAt ||
-    detectionResult?.created_at ||
-    detectionResult?.detectedAt ||
-    detectionResult?.updatedAt
-  );
 
   const doc = new jsPDF('p', 'mm', 'a4');
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-
   const margin = 20;
   const contentWidth = pageWidth - 2 * margin;
 
   let y = margin;
 
-  // === Header ===
+  // Report header
   doc.setFontSize(10);
   doc.setTextColor(100);
   doc.text('Image Authenticity Analysis Report', margin, y);
@@ -176,53 +376,46 @@ const status =
   doc.setFontSize(8);
   doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
 
-  y += 8;
+  y += 5;
 
   doc.setDrawColor(15, 76, 117);
-  doc.setLineWidth(0.5);
   doc.line(margin, y, pageWidth - margin, y);
 
-  y += 10;
+  y += 9;
 
-  // === Project Logo ===
-  try {
+  // Logo - optional
+  if (typeof window !== 'undefined') {
     const logoDataUrl = await loadImageAsDataUrl(
-      window.location.origin + '/deepfake-logo.svg'
+      `${window.location.origin}/deepfake-logo.png`
     );
 
     if (logoDataUrl) {
-      doc.addImage(logoDataUrl, 'PNG', margin, y, 15, 15);
+      const logoFormat = getImageFormat(logoDataUrl);
+
+      if (logoFormat) {
+        try {
+          doc.addImage(logoDataUrl, logoFormat, margin, y, 14, 14);
+        } catch {
+          // Continue without the logo if it cannot be embedded.
+        }
+      }
     }
-  } catch {
-    // Skip logo if it fails.
   }
 
   doc.setFontSize(16);
   doc.setTextColor(15, 76, 117);
   doc.setFont(undefined, 'bold');
-
-  doc.text('AI Deepfake Image Detection', margin + 20, y + 8);
+  doc.text('AI Deepfake Image Detection', margin + 18, y + 7);
 
   doc.setFontSize(9);
   doc.setFont(undefined, 'normal');
   doc.setTextColor(80);
+  doc.text('Comprehensive Analysis Report', margin + 18, y + 13);
 
-  doc.text(
-    'Image Authenticity Analysis Report',
-    margin + 20,
-    y + 14
-  );
+  y += 23;
 
-  y += 25;
-
-  // === Section: Detection Result ===
-  y = addSectionHeader(
-    doc,
-    'Detection Result',
-    margin,
-    y,
-    pageWidth
-  );
+  // Detection result
+  y = addSectionHeader(doc, 'Detection Result', margin, y, pageWidth);
 
   y = addField(
     doc,
@@ -236,9 +429,7 @@ const status =
   y = addField(
     doc,
     'Confidence Score',
-    confidence != null
-      ? `${confidence.toFixed(1)}%`
-      : 'Not available',
+    confidence != null ? `${confidence.toFixed(1)}%` : 'Not available',
     margin,
     y,
     contentWidth
@@ -257,23 +448,37 @@ const status =
 
   y = addField(
     doc,
-    'Analysis Status',
+    'Success',
+    detection.success ?? 'Not provided',
+    margin,
+    y,
+    contentWidth
+  );
+
+  y = addField(
+    doc,
+    'Report Status',
     status,
     margin,
     y,
     contentWidth
   );
 
-  y += 5;
+  if (description) {
+    y = addField(
+      doc,
+      'Description',
+      description,
+      margin,
+      y,
+      contentWidth
+    );
+  }
 
-  // === Section: Image Information ===
-  y = addSectionHeader(
-    doc,
-    'Image Information',
-    margin,
-    y,
-    pageWidth
-  );
+  y += 3;
+
+  // Image information
+  y = addSectionHeader(doc, 'Image Information', margin, y, pageWidth);
 
   y = addField(
     doc,
@@ -288,7 +493,7 @@ const status =
     doc,
     'Format',
     fileType ||
-      (filename
+      (filename && filename.includes('.')
         ? filename.split('.').pop().toUpperCase()
         : 'Not available'),
     margin,
@@ -305,16 +510,41 @@ const status =
     contentWidth
   );
 
-  y += 5;
-
-  // === Section: Visualizations ===
-  y = addSectionHeader(
+  y = addField(
     doc,
-    'Visualizations',
+    'Analysis Timestamp',
+    formatTimestamp(analysisTimestamp) || 'Not available',
     margin,
     y,
-    pageWidth
+    contentWidth
   );
+
+  y = addField(
+    doc,
+    'Record Created',
+    formatTimestamp(detection.createdAt) ||
+      detection.createdAt ||
+      'Not provided',
+    margin,
+    y,
+    contentWidth
+  );
+
+  y = addField(
+    doc,
+    'Last Updated',
+    formatTimestamp(detection.updatedAt) ||
+      detection.updatedAt ||
+      'Not provided',
+    margin,
+    y,
+    contentWidth
+  );
+
+  y += 3;
+
+  // Visual analysis
+  y = addSectionHeader(doc, 'Visual Analysis', margin, y, pageWidth);
 
   const imageWidth = (contentWidth - 10) / 3;
   const imageHeight = imageWidth * 0.75;
@@ -337,138 +567,137 @@ const status =
     reportOverlayImage,
   ];
 
-  // Load images.
   const loadedImages = await Promise.all(
     imageUrls.map(async (url) => {
       const resolved = resolveImageUrl(url);
-
-      if (!resolved) return null;
-
-      return await loadImageAsDataUrl(resolved);
+      return resolved ? loadImageAsDataUrl(resolved) : null;
     })
   );
 
-  // Check if a new page is needed.
-  if (y + imageHeight + 15 > pageHeight - margin) {
+  if (y + imageHeight + 12 > pageHeight - margin) {
     doc.addPage();
     y = margin;
   }
 
   for (let i = 0; i < 3; i++) {
-    const xPos = positions[i];
-    const label = labels[i];
-    const imgData = loadedImages[i];
+    const imageData = loadedImages[i];
+
+    if (!imageData) {
+      addImagePlaceholder(
+        doc,
+        labels[i],
+        positions[i],
+        y,
+        imageWidth,
+        imageHeight,
+        'Image not available'
+      );
+
+      continue;
+    }
 
     doc.setFontSize(8);
     doc.setFont(undefined, 'bold');
     doc.setTextColor(60);
+    doc.text(labels[i], positions[i], y);
 
-    doc.text(label, xPos, y);
+    try {
+      const format = getImageFormat(imageData);
 
-    doc.setFont(undefined, 'normal');
-
-    if (imgData) {
-      try {
-        const imageFormat = imgData.startsWith('data:image/png')
-          ? 'PNG'
-          : 'JPEG';
-
-        doc.addImage(
-          imgData,
-          imageFormat,
-          xPos,
-          y + 3,
-          imageWidth,
-          imageHeight
-        );
-      } catch {
-        doc.setFillColor(240, 240, 240);
-
-        doc.rect(
-          xPos,
-          y + 3,
-          imageWidth,
-          imageHeight,
-          'F'
-        );
-
-        doc.setFontSize(7);
-        doc.setTextColor(150);
-
-        doc.text(
-          'Image not available',
-          xPos + imageWidth / 2 - 15,
-          y + 3 + imageHeight / 2
-        );
+      if (!format) {
+        throw new Error('Unsupported image format.');
       }
-    } else {
-      doc.setFillColor(240, 240, 240);
 
-      doc.rect(
-        xPos,
+      doc.addImage(
+        imageData,
+        format,
+        positions[i],
         y + 3,
         imageWidth,
-        imageHeight,
-        'F'
+        imageHeight
       );
-
-      doc.setFontSize(7);
-      doc.setTextColor(150);
-
-      if (i === 0) {
-        doc.text(
-          'Image not available',
-          xPos + imageWidth / 2 - 15,
-          y + 3 + imageHeight / 2
-        );
-      } else {
-        doc.text(
-          'Not provided for',
-          xPos + imageWidth / 2 - 18,
-          y + 3 + imageHeight / 2 - 2
-        );
-
-        doc.text(
-          'this analysis',
-          xPos + imageWidth / 2 - 15,
-          y + 3 + imageHeight / 2 + 4
-        );
-      }
+    } catch {
+      addImagePlaceholder(
+        doc,
+        labels[i],
+        positions[i],
+        y,
+        imageWidth,
+        imageHeight,
+        'Image format not supported'
+      );
     }
   }
 
-  y += imageHeight + 15;
+  y += imageHeight + 12;
 
-  // === Section: Analysis Description ===
-  if (y + 20 > pageHeight - margin) {
-    doc.addPage();
-    y = margin;
-  }
-
-  y = addSectionHeader(
+  // Additional analysis information
+  y = addDetailSection(
     doc,
-    'Analysis Description',
-    margin,
-    y,
-    pageWidth
-  );
-
-  const descriptionText =
-    description ||
-    generateDefaultDescription(result, confidence, filename);
-
-  y = addWrappedText(
-    doc,
-    descriptionText,
+    'Key Indicators',
+    detection.keyIndicators,
     margin,
     y,
     contentWidth,
-    10
+    pageWidth
   );
 
-  y += 5;
+  y = addDetailSection(
+    doc,
+    'Class Probabilities',
+    detection.probabilities,
+    margin,
+    y,
+    contentWidth,
+    pageWidth
+  );
 
-  // === Footer ===
+  y = addDetailSection(
+    doc,
+    'Model Reasoning',
+    detection.reasoning,
+    margin,
+    y,
+    contentWidth,
+    pageWidth
+  );
+
+  y = addDetailSection(
+    doc,
+    'Visual Patterns',
+    detection.visualPatterns,
+    margin,
+    y,
+    contentWidth,
+    pageWidth
+  );
+
+ 
+
+  // Associated user - exclude sensitive fields
+  if (detection.user != null) {
+    let safeUser = detection.user;
+
+    if (typeof safeUser === 'object' && !Array.isArray(safeUser)) {
+      safeUser = Object.fromEntries(
+        Object.entries(safeUser).filter(
+          ([key]) => !/password|token|secret|credential/i.test(key)
+        )
+      );
+    }
+
+    y = addDetailSection(
+      doc,
+      'Associated User',
+      safeUser,
+      margin,
+      y,
+      contentWidth,
+      pageWidth
+    );
+  }
+
+  // Footer on every page
   const pageCount = doc.internal.getNumberOfPages();
 
   for (let i = 1; i <= pageCount; i++) {
@@ -479,95 +708,14 @@ const status =
 
     doc.text(
       `AI Deepfake Image Detection - Page ${i} of ${pageCount}`,
-      pageWidth / 2 - 20,
-      pageHeight - 8
+      pageWidth / 2,
+      pageHeight - 8,
+      { align: 'center' }
     );
   }
 
-  // === Download ===
-  const reportName = `deepfake-report-${
-    filename ? filename.replace(/\.[^.]+$/, '') : 'image'
-  }-${Date.now()}.pdf`;
+  // Download as PDF, not JSON
+  const name = safeFilename(filename);
 
-  doc.save(reportName);
-}
-
-function addSectionHeader(doc, title, margin, y, pageWidth) {
-  if (y + 10 > doc.internal.pageSize.getHeight() - 20) {
-    doc.addPage();
-    y = 20;
-  }
-
-  doc.setFontSize(12);
-  doc.setFont(undefined, 'bold');
-  doc.setTextColor(15, 76, 117);
-
-  doc.text(title, margin, y);
-
-  doc.setDrawColor(15, 76, 117);
-  doc.setLineWidth(0.3);
-
-  doc.line(margin, y + 2, pageWidth - margin, y + 2);
-
-  doc.setFont(undefined, 'normal');
-
-  return y + 8;
-}
-
-function addField(doc, label, value, margin, y, contentWidth) {
-  if (y + 8 > doc.internal.pageSize.getHeight() - 20) {
-    doc.addPage();
-    y = 20;
-  }
-
-  doc.setFontSize(9);
-  doc.setFont(undefined, 'bold');
-  doc.setTextColor(60);
-
-  doc.text(`${label}:`, margin, y);
-
-  doc.setFont(undefined, 'normal');
-  doc.setTextColor(40);
-
-  const labelWidth = doc.getTextWidth(`${label}: `);
-
-  doc.text(
-    String(value),
-    margin + labelWidth,
-    y
-  );
-
-  return y + 7;
-}
-
-function addWrappedText(doc, text, margin, y, contentWidth, fontSize) {
-  doc.setFontSize(fontSize);
-  doc.setTextColor(40);
-
-  const lines = doc.splitTextToSize(text, contentWidth);
-
-  for (const line of lines) {
-    if (y + 6 > doc.internal.pageSize.getHeight() - 20) {
-      doc.addPage();
-      y = 20;
-    }
-
-    doc.text(line, margin, y);
-    y += 5;
-  }
-
-  return y;
-}
-
-function generateDefaultDescription(result, confidence, filename) {
-  const classification = result || 'unknown';
-
-  const confidenceStr =
-    confidence != null
-      ? `${confidence.toFixed(1)}%`
-      : 'not reported';
-
-  return `The submitted image${
-    filename ? ` "${filename}"` : ''
-  } was analyzed by the image authenticity detection system and classified as ${classification}. The reported confidence score was ${confidenceStr}.`;
+  doc.save(`deepfake-report-${name}-${Date.now()}.pdf`);
 }
